@@ -16,7 +16,7 @@ The confusion sets are in `confus`.
 
 ## AutoCSC
 
-We implement some architectures in recent CSC papers in `autopsic.py`.
+We implement some architectures in recent CSC papers in `autocsc.py`.
 
 For instance (SoftMasked BERT):
 

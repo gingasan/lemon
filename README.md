@@ -37,3 +37,20 @@ prd_ids = outputs["predict_ids"].tolist()
 
 If you have new models or suggestions for promoting our implementations, feel free to email me.
 
+
+
+Running (set `--mft` for **Masked-FT**):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python run.py \
+  --do_train \
+  --do_eval \
+  --train_on xxx.txt \
+  --eval_on xx.txt \
+  --output_dir mft \
+  --max_train_steps 10000 \
+  --fp16 \
+  --model_type mdcspell \
+  --mft
+```
+

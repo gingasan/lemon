@@ -6,11 +6,27 @@ This is the official repo for the ACL 2023 paper Rethinking Masked Language Mode
 
 ## LEMOM
 
-LEMON (large-scale multi-domain dataset with natural spelling errors) is a novel benchmark released with our paper. All test sets are in `lemon`. (coming soon)
+LEMON (large-scale multi-domain dataset with natural spelling errors) is a novel benchmark released with our paper. All test sets are in `lemon_v2`.
+
+**Note: This dataset can only be used for academic research, it cannot be used for commercial purposes.**
 
 The other test sets we use in the paper are in `sighan_ecspell`.
 
 The confusion sets are in `confus`.
+
+
+
+**Trained weights**
+
+In our paper, we train BERT for 30,000 steps, with the learning rate in 5e- 5 and batch size 8192. We share our trained model weights to facilitate future research. We welcome researchers to develop better ones based on models.
+
+[BERT-MFT]()
+
+[BERT-AT-MFT]()
+
+[BERT-SoftMasked-MFT]()
+
+(Coming soon)
 
 
 
@@ -23,11 +39,11 @@ For instance (SoftMasked BERT):
 ```python
 from autocsc import AutoCSCSoftMasked
 
-# To load the model, similar to huggingface transformers.
+# Load the model, similar to huggingface transformers.
 model = AutoCSCSoftMasked.from_pretrained("bert-base-chinese",
                                           cache_dir="cache")
 
-# To go forward step.
+# Go forward step.
 outputs = model(src_ids=src_ids,
                 attention_mask=attention_mask,
                 trg_ids=trg_ids)

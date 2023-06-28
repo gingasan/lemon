@@ -18,7 +18,7 @@ The confusion sets are in `confus`.
 
 **Trained weights**
 
-In our paper, we train BERT for 30,000 steps, with the learning rate in 5e- 5 and batch size 8192. We share our trained model weights to facilitate future research. We welcome researchers to develop better ones based on models.
+In our paper, we train BERT for 30,000 steps, with the learning rate in 5e- 5 and batch size 8192. We share our trained model weights to facilitate future research. We welcome researchers to develop better ones based on our models.
 
 [BERT-MFT]()
 

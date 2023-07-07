@@ -1,12 +1,12 @@
 # Rethinking Masked Language Modeling for Chinese Spelling Correction
 
-This is the official repo for the ACL 2023 paper Rethinking Masked Language Modeling for Chinese Spelling Correction.
+This is the official repo for the ACL 2023 paper [Rethinking Masked Language Modeling for Chinese Spelling Correction](https://arxiv.org/abs/2305.17721).
 
 
 
 ## LEMOM
 
-LEMON (large-scale multi-domain dataset with natural spelling errors) is a novel benchmark released with our paper. All test sets are in `lemon_v2`.
+*LEMON (large-scale multi-domain dataset with natural spelling errors)* is a novel benchmark released with our paper. All test sets are in `lemon_v2`.
 
 **Note: This dataset can only be used for academic research, it cannot be used for commercial purposes.**
 
@@ -18,15 +18,13 @@ The confusion sets are in `confus`.
 
 **Trained weights**
 
-In our paper, we train BERT for 30,000 steps, with the learning rate in 5e- 5 and batch size 8192. We share our trained model weights to facilitate future research. We welcome researchers to develop better ones based on our models.
+In our paper, we train BERT for 30,000 steps, with the learning rate 5e-5 and batch size 8192. The backbone model is [bert-base-chinese](https://huggingface.co/bert-base-chinese). We share our trained model weights to facilitate future research. We welcome researchers to develop better ones based on our models.
 
-[BERT-MFT]()
+[BERT-finetune-MFT](https://drive.google.com/file/d/1nKWX0G5e-xzx7D66MzcAFOK-5CSr0_yH/view?usp=share_link)
 
-[BERT-AT-MFT]()
+[BERT-finetune-MFT-CreAT-maskany](https://drive.google.com/file/d/1g7mxIQMLloxpPSJcW65KU4uZmbVN985c/view?usp=share_link)
 
-[BERT-SoftMasked-MFT]()
-
-(Coming soon)
+[BERT-SoftMasked-MFT](https://drive.google.com/file/d/1HBLw4IM4JCz3g7P6YedTsPU_1DBQhv8m/view?usp=share_link)
 
 
 

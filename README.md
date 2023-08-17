@@ -4,6 +4,28 @@ This is the official repo for the ACL 2023 paper [Rethinking Masked Language Mod
 
 
 
+==New==
+
+**New work**
+
+*ReLM* is now released. It is a rephrasing language model trained based on bert-base-chinese and 34 million monolingual data.
+
+[relm-m0.2.bin](https://drive.google.com/file/d/1vjPhPO0fTYZS80dTE5ba4vhwDlSnSfA4/view?usp=share_link)
+
+Different from BERT-MFT, ReLM is a pure language model, which optimizes the rephrasing training objective instead of sequence tagging. The details are in our paper [Chinese Spelling Correction as Rephraing Language Model]().
+
+
+
+**Monolingual data**
+
+We share our used training data for LEMON. It contains 34 million monolingual sentences and we synthesize sentence pairs based on our confusion set in `confus`.
+
+[monolingual-wiki-news-l64](https://drive.google.com/file/d/144ui9mkHEK1xLNZXB1WP-EjmydorwkYg/view?usp=share_link)
+
+We split the data into 343 sub-files with 100,000 sentences for each. The total size of the .zip file is 1.5G.
+
+
+
 ## LEMOM
 
 *LEMON (large-scale multi-domain dataset with natural spelling errors)* is a novel benchmark released with our paper. All test sets are in `lemon_v2`.

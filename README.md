@@ -1,6 +1,6 @@
 # Rethinking Masked Language Modeling for Chinese Spelling Correction
 
-This is the official repo for the ACL 2023 paper [Rethinking Masked Language Modeling for Chinese Spelling Correction](https://arxiv.org/abs/2305.17721).
+This is the official repo for the ACL 2023 paper [Rethinking Masked Language Modeling for Chinese Spelling Correction](https://aclanthology.org/2023.acl-long.600.pdf).
 
 
 
@@ -54,7 +54,11 @@ In our paper, we train BERT for 30,000 steps, with the learning rate 5e-5 and ba
 
 We implement some architectures in recent CSC papers in `autocsc.py`.
 
-For instance (SoftMasked BERT):
+* [Spelling Error Correction with Soft-Masked BERT](https://aclanthology.org/2020.acl-main.82.pdf)
+
+* [MDCSpell: A Multi-task Detector-Corrector Framework for Chinese Spelling Correction](https://aclanthology.org/2022.findings-acl.98.pdf)
+
+For instance (Soft-Masked BERT):
 
 ```python
 from autocsc import AutoCSCSoftMasked

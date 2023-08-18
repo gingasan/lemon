@@ -6,11 +6,13 @@ This is the official repo for the ACL 2023 paper [Rethinking Masked Language Mod
 
 ==New==
 
-**New work**
+**ReLM**
 
 *ReLM* is now released. It is a rephrasing language model trained based on bert-base-chinese and 34 million monolingual data.
 
 [relm-m0.2.bin](https://drive.google.com/file/d/1vjPhPO0fTYZS80dTE5ba4vhwDlSnSfA4/view?usp=share_link)
+
+[relm-m0.3.bin](https://drive.google.com/file/d/10vvkG_jzNK-CjIwlSvizhE1IOpnn9OqN/view?usp=share_link)
 
 Different from BERT-MFT, ReLM is a pure language model, which optimizes the rephrasing training objective instead of sequence tagging. The details are in our paper [Chinese Spelling Correction as Rephraing Language Model]().
 

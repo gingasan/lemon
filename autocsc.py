@@ -1,7 +1,37 @@
 import torch
 import torch.nn as nn
 from copy import deepcopy
-from transformers import BertPreTrainedModel, BertModel
+from transformers import BertPreTrainedModel, BertModel, BertForMaskedLM
+
+
+class AutoCSCReLM(BertForMaskedLM):
+    def __init__(self, config):
+        super().__init__(config)
+        self.num_labels = config.vocab_size
+        self.softmax = nn.Softmax(-1)
+
+    def forward(self, src_ids, trg_ids, attention_mask):
+        labels = trg_ids.clone()
+        labels[(src_ids == trg_ids)] = -100
+
+        outputs = self.bert(
+            input_ids=src_ids,
+            attention_mask=attention_mask,
+        )
+
+        sequence_output = outputs[0]
+        logits = self.cls(sequence_output)
+
+        loss_fct = nn.CrossEntropyLoss()  # -100 index = padding token
+        loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+
+        probs = self.softmax(logits)
+        _, predict_ids = torch.max(probs, -1)
+
+        return {
+            "loss": loss,
+            "predict_ids": predict_ids,
+        }
 
 
 class AutoCSCfinetune(BertPreTrainedModel):

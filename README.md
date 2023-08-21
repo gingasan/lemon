@@ -14,7 +14,15 @@ This is the official repo for the ACL 2023 paper [Rethinking Masked Language Mod
 
 [relm-m0.3.bin](https://drive.google.com/file/d/10vvkG_jzNK-CjIwlSvizhE1IOpnn9OqN/view?usp=share_link)
 
-Different from BERT-MFT, ReLM is a pure language model, which optimizes the rephrasing training objective instead of sequence tagging. The details are in our paper [Chinese Spelling Correction as Rephraing Language Model]().
+Different from BERT-MFT, ReLM is a pure language model, which optimizes the rephrasing language modeling objective instead of sequence tagging. The details are in our paper [Chinese Spelling Correction as Rephraing Language Model](https://arxiv.org/pdf/2308.08796.pdf).
+
+```python
+from autocsc import AutoCSCReLM
+
+model = AutoCSCReLM.from_pretrained("bert-base-chinese",
+                                    state_dict=torch.load("relm-m0.3.bin"),
+                                    cache_dir="cache")
+```
 
 
 
@@ -25,6 +33,16 @@ We share our used training data for LEMON. It contains 34 million monolingual se
 [monolingual-wiki-news-l64](https://drive.google.com/file/d/144ui9mkHEK1xLNZXB1WP-EjmydorwkYg/view?usp=share_link)
 
 We split the data into 343 sub-files with 100,000 sentences for each. The total size of the .zip file is 1.5G.
+
+Our code supports multiple GPUs now:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 accelerate launch --multi_gpu run.py \
+  --do_train \
+  --do_eval \
+  --fp16 \
+  --mft
+```
 
 
 
@@ -94,5 +112,17 @@ CUDA_VISIBLE_DEVICES=0 python run.py \
   --fp16 \
   --model_type mdcspell \
   --mft
+```
+
+
+
+Directly testing on LEMON (including SIGHAN):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python run.py \
+  --test_on_lemon ../data/lemon \
+  --output_dir relm \
+  --model_type relm \
+  --load_state_dict relm-m0.3.bin
 ```
 

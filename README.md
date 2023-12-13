@@ -4,17 +4,30 @@ This is the official repo for the ACL 2023 paper [Rethinking Masked Language Mod
 
 
 
+Fine-tuning results on some of benchmarks:
+
+|                     | EC-LAW   | EC-MED   | EC-ODW   | MCSC     |
+| ------------------- | -------- | -------- | -------- | -------- |
+| BERT                | 39.8     | 22.3     | 25.0     | 70.7     |
+| MDCSpell-Masked-FT  | 80.6     | 69.6     | 66.9     | 78.5     |
+| Baichuan2-Masked-FT | 86.0     | 73.2     | 82.6     | 75.5     |
+| ReLM                | **95.6** | **89.9** | **92.3** | **83.2** |
+
+
+
 ==New==
+
+Our new work [Chinese Spelling Correction as Rephraing Language Model](https://arxiv.org/pdf/2308.08796.pdf) is accepted by AAAI 2024.
 
 **ReLM**
 
-*ReLM* is now released. It is a rephrasing language model trained based on bert-base-chinese and 34 million monolingual data.
+*ReLM* pre-trained model is released. It is a rephrasing language model trained based on bert-base-chinese and 34 million monolingual data.
 
 [relm-m0.2.bin](https://drive.google.com/file/d/1vjPhPO0fTYZS80dTE5ba4vhwDlSnSfA4/view?usp=share_link)
 
 [relm-m0.3.bin](https://drive.google.com/file/d/10vvkG_jzNK-CjIwlSvizhE1IOpnn9OqN/view?usp=share_link)
 
-Different from BERT-MFT, ReLM is a pure language model, which optimizes the rephrasing language modeling objective instead of sequence tagging. The details are in our paper [Chinese Spelling Correction as Rephraing Language Model](https://arxiv.org/pdf/2308.08796.pdf).
+Different from BERT-MFT, ReLM is a pure language model, which optimizes the rephrasing language modeling objective instead of sequence tagging. 
 
 ```python
 from autocsc import AutoCSCReLM

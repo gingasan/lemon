@@ -1,23 +1,21 @@
 # Rethinking Masked Language Modeling for Chinese Spelling Correction
 
-This is the official repo for the ACL 2023 paper [Rethinking Masked Language Modeling for Chinese Spelling Correction](https://aclanthology.org/2023.acl-long.600.pdf).
+This is the official repo for the ACL 2023 paper [Rethinking Masked Language Modeling for Chinese Spelling Correction](https://aclanthology.org/2023.acl-long.600.pdf); AAAI 2024 paper [Chinese Spelling Correction as Rephraing Language Model](https://arxiv.org/pdf/2308.08796.pdf).
 
 
 
 Fine-tuning results on some of benchmarks:
 
-|                     | EC-LAW   | EC-MED   | EC-ODW   | MCSC     |
-| ------------------- | -------- | -------- | -------- | -------- |
-| BERT                | 39.8     | 22.3     | 25.0     | 70.7     |
-| MDCSpell-Masked-FT  | 80.6     | 69.6     | 66.9     | 78.5     |
-| Baichuan2-Masked-FT | 86.0     | 73.2     | 82.6     | 75.5     |
-| ReLM                | **95.6** | **89.9** | **92.3** | **83.2** |
+|                         | EC-LAW   | EC-MED   | EC-ODW   | MCSC     |
+| ----------------------- | -------- | -------- | -------- | -------- |
+| BERT                    | 39.8     | 22.3     | 25.0     | 70.7     |
+| MDCSpell-**Masked-FT**  | 80.6     | 69.6     | 66.9     | 78.5     |
+| Baichuan2-**Masked-FT** | 86.0     | 73.2     | 82.6     | 75.5     |
+| **ReLM**                | **95.6** | **89.9** | **92.3** | **83.2** |
 
 
 
 ==New==
-
-Our new work [Chinese Spelling Correction as Rephraing Language Model](https://arxiv.org/pdf/2308.08796.pdf) is accepted by AAAI 2024.
 
 **ReLM**
 

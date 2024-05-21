@@ -11,9 +11,10 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset, IterableDataset
 from tqdm.auto import tqdm, trange
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, get_scheduler
 from accelerate import Accelerator
 from autocsc import *
+import jsonlines
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -236,10 +237,9 @@ class DataProcessorForTagging(DataProcessor):
         return features
 
 
-
 class DataProcessorForRephrasing(DataProcessor):
     @staticmethod
-    def convert_examples_to_features(examples, max_seq_length, tokenizer, verbose=True):
+    def convert_examples_to_features(examples, max_seq_length, tokenizer, verbose=True, skip_unk=False):
         features = []
         for i, example in enumerate(examples):
             src_ids = tokenizer(example.src,
@@ -252,10 +252,17 @@ class DataProcessorForRephrasing(DataProcessor):
                                 truncation=True,
                                 is_split_into_words=True,
                                 add_special_tokens=False).input_ids
+            src_ids = [_ for _ in src_ids if _ != 6]
+            trg_ids = [_ for _ in trg_ids if _ != 6]
+            if skip_unk:
+                if (tokenizer.unk_token_id in src_ids) or (tokenizer.unk_token_id in trg_ids):
+                    continue
             input_ids = [tokenizer.cls_token_id] + src_ids + [tokenizer.sep_token_id] + [tokenizer.mask_token_id for _ in trg_ids] + [tokenizer.sep_token_id]
             label_ids = [tokenizer.cls_token_id] + src_ids + [tokenizer.sep_token_id] + trg_ids + [tokenizer.sep_token_id]
-            attention_mask = [1] * len(input_ids)
             ref_ids = [tokenizer.cls_token_id] + trg_ids + [tokenizer.sep_token_id] + trg_ids + [tokenizer.sep_token_id]
+            attention_mask = [1] * len(input_ids)
+            if len(src_ids) != len(trg_ids):
+                continue
 
             offset_length = max_seq_length - len(input_ids)
             if offset_length > 0:
@@ -287,7 +294,135 @@ class DataProcessorForRephrasing(DataProcessor):
         return features
 
 
+class DataProcessorForTaggingConfus(DataProcessor):
+    def load_confus(self, confus_dir="../GPT-CSC/confus"):
+        with open(os.path.join(confus_dir, "stroke.json"), "r") as f:
+            self.stroke_confus = json.load(f)
+        with open(os.path.join(confus_dir, "pinyin_sim.json"), "r") as f:
+            self.pinyin_sim_confus = json.load(f)
+        with open(os.path.join(confus_dir, "pinyin_sam.json"), "r") as f:
+            self.pinyin_sam_confus = json.load(f)
+        with open(os.path.join(confus_dir, "word_freq.txt"), "r") as f:
+            self.word_list = [line.strip() for line in f.readlines()]
+    
+    @staticmethod
+    def ishan(char):
+        return "\u4e00" <= char <= "\u9fff"
+    
+    def confus_for_src(self, src, trg):
+        tokens = deepcopy(src)
+        trg_tokens = trg
+        j = -1
+        for i, (s, t) in enumerate(zip(tokens, trg_tokens)):
+            if s != t:
+                j = i
+                break
+        all_indices = list(range(max(0, i - 5), min(len(tokens), i + 5 + 1)))
+        choosen = random.choice(all_indices)
+        if choosen == j or not self.ishan(tokens[choosen]):
+            return tokens
+        j = choosen
+        rn = random.random()
+        if rn < 0.4:
+            if tokens[j] in self.pinyin_sam_confus:
+                tokens[j] = random.choice(self.pinyin_sam_confus[tokens[j]])
+            else:
+                tokens[j] = random.choice(self.word_list)
+        elif rn < 0.7:
+            if tokens[j] in self.pinyin_sim_confus:
+                tokens[j] = random.choice(self.pinyin_sim_confus[tokens[j]])
+            else:
+                tokens[j] = random.choice(self.word_list)
+        elif rn < 0.9:
+            if tokens[j] in self.stroke_confus:
+                tokens[j] = random.choice(self.stroke_confus[tokens[j]])
+            else:
+                tokens[j] = random.choice(self.word_list)
+        else:
+            tokens[j] = random.choice(self.word_list)
+
+        return tokens
+
+    def convert_examples_to_features(self, examples, max_seq_length, tokenizer, verbose=True):
+        self.load_confus()
+
+        features = []
+        for i, example in enumerate(examples):
+            encoded_inputs = tokenizer(example.src,
+                                       max_length=max_seq_length,
+                                       padding="max_length",
+                                       truncation=True,
+                                       is_split_into_words=True)
+            src_ids = encoded_inputs["input_ids"]
+            attention_mask = encoded_inputs["attention_mask"]
+            trg_ids = tokenizer(example.trg,
+                                max_length=max_seq_length,
+                                padding="max_length",
+                                truncation=True,
+                                is_split_into_words=True)["input_ids"]
+
+            noisy_src = self.confus_for_src(example.src, example.trg)
+            noisy_src_ids = tokenizer(noisy_src,
+                                      max_length=max_seq_length,
+                                      padding="max_length",
+                                      truncation=True,
+                                      is_split_into_words=True)["input_ids"]
+
+            assert len(src_ids) == max_seq_length
+            assert len(attention_mask) == max_seq_length
+            assert len(trg_ids) == max_seq_length
+            assert len(noisy_src_ids) == max_seq_length
+
+            if verbose and i < 5:
+                logger.info("*** Example ***")
+                logger.info("guid: %s" % example.guid)
+                logger.info("src_tokens:\t%s" % " ".join(example.src))
+                logger.info("noisy_tokens:\t%s" % " ".join(noisy_src))
+                logger.info("trg_tokens:\t%s" % " ".join(example.trg))
+                logger.info("src_ids: %s" % " ".join([str(x) for x in src_ids]))
+                logger.info("trg_ids: %s" % " ".join([str(x) for x in trg_ids]))
+                logger.info("attention_mask: %s" % " ".join([str(x) for x in attention_mask]))
+
+            features.append(
+                    InputFeatures(src_ids=src_ids,
+                                  attention_mask=attention_mask,
+                                  trg_ids=trg_ids,
+                                  trg_ref_ids=noisy_src_ids)
+            )
+        return features
+
+
 class Metrics:
+
+    @staticmethod
+    def compute_detect(src_sents, trg_sents, prd_sents):
+
+        pos_sents, neg_sents, tp_sents, fp_sents, fn_sents, prd_pos_sents, prd_neg_sents = 0, 0, 0, 0, 0, 0, 0
+        for s, t, p in zip(src_sents, trg_sents, prd_sents):
+            if s != t:
+                pos_sents+=1
+                if p != s:
+                    tp_sents+=1
+                else:
+                    fn_sents+=1
+
+            else:
+                neg_sents+=1
+                if p != t:
+                    fp_sents+=1
+
+            if s != p:
+                prd_pos_sents+=1
+            else:
+                prd_neg_sents+=1
+
+        p = 1.0 * tp_sents / (prd_pos_sents+ 1e-12)
+        r = 1.0 * tp_sents / (pos_sents+ 1e-12)
+        f1 = 2.0 * (p * r) / (p + r + 1e-12)
+        fpr = 1.0 * fp_sents / (neg_sents + 1e-12)
+
+        return p, r, f1, fpr
+    
     @staticmethod
     def compute(src_sents, trg_sents, prd_sents):
         def difference(src, trg):
@@ -317,13 +452,21 @@ class Metrics:
             if s == p:
                 prd_neg_sents.append(difference(s, p))
 
-        p = 1.0 * len(tp_sents) / len(prd_pos_sents)
-        r = 1.0 * len(tp_sents) / len(pos_sents)
+        p = 1.0 * len(tp_sents) / (len(prd_pos_sents)+ 1e-12)
+        r = 1.0 * len(tp_sents) / (len(pos_sents)+ 1e-12)
         f1 = 2.0 * (p * r) / (p + r + 1e-12)
-        fpr = 1.0 * (len(fp_sents) + 1e-12) / (len(neg_sents) + 1e-12)
+        fpr = 1.0 * len(fp_sents) / (len(neg_sents) + 1e-12)
 
         return p, r, f1, fpr, tp_sents, fp_sents, fn_sents
 
+def equals(src,trg):
+    if len(src)!=len(trg):
+        return False
+    for i,(st,tt) in enumerate(zip(src,trg)):
+        # we do not consider the punctuation
+        if st not in ['.','。',',','，','?','？',':','：','!','！'] and st!=tt:
+            return False
+    return True
 
 def mask_tokens(inputs, tokenizer, noise_probability=0.2):
     inputs = inputs.clone()
@@ -356,11 +499,30 @@ def mask_tokens_only_neg(inputs, labels, tokenizer, noise_probability=0.2):
     return inputs
 
 
+def mask_tokens_only_neg_2(inputs, noisy_inputs, labels, tokenizer, noise_probability=0.2):
+    inputs = inputs.clone()
+    noisy_inputs = noisy_inputs.clone()
+    labels = labels.clone()
+    probability_matrix = torch.full(inputs.shape, noise_probability)
+    special_tokens_mask = [
+        tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in inputs.tolist()
+    ]
+    special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
+    neq_tokens_mask = (inputs != labels).cpu()
+
+    probability_matrix.masked_fill_(special_tokens_mask + neq_tokens_mask, value=0.0)
+    masked_indices = torch.bernoulli(probability_matrix).bool()
+    inputs[masked_indices] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+    noisy_inputs[masked_indices] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+
+    return inputs, noisy_inputs
+
+
 def main():
     parser = argparse.ArgumentParser()
 
     # Data config
-    parser.add_argument("--data_dir", type=str, default="../data/csc",
+    parser.add_argument("--data_dir", type=str, default="data/",
                         help="Directory to contain the input data for all tasks.")
     parser.add_argument("--train_on", type=str, default="",
                         help="Specify a training set.")
@@ -400,6 +562,10 @@ def main():
                         help="Total number of training epochs to perform.")
     parser.add_argument("--max_train_steps", type=int, default=1000,
                         help="Total number of training steps to perform. If provided, overrides training epochs.")
+    parser.add_argument("--lr_scheduler_type", type=str, default="constant",
+                        help="Scheduler type for learning rate warmup.")
+    parser.add_argument("--warmup_proportion", type=float, default=0.06,
+                        help="Proportion of training to perform learning rate warmup for.")
     parser.add_argument("--weight_decay", type=float, default=0.,
                         help="L2 weight decay for training.")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1,
@@ -416,19 +582,32 @@ def main():
                         help="Mask rate for masked-fine-tuning.")
     parser.add_argument("--mft", action="store_true",
                         help="Training with masked-fine-tuning.")
+    parser.add_argument("--detect", action="store_true",)
+    
+    parser.add_argument("--response_file",type=str)
+    parser.add_argument("--eval_mode", type=str, default="evaluate",
+                        help="evaluate or predict, for predict mode there is no true label. (The pseudo label is the same with the input)")    
 
     args = parser.parse_args()
 
     relm = args.model_type.startswith("relm")
+    craspell = args.model_type.startswith("craspell")
 
     AutoCSC = {
         "finetune": AutoCSCfinetune,
         "softmasked": AutoCSCSoftMasked,
         "mdcspell": AutoCSCMDCSpell,
+        "craspell": AutoCSCCRASpell,
         "relm": AutoCSCReLM,
+        "relm-prompt": AutoCSCReLMPrompt,
     }
 
-    processor = DataProcessorForRephrasing() if relm else DataProcessorForTagging()
+    if relm:
+        processor = DataProcessorForRephrasing()
+    elif craspell:
+        processor = DataProcessorForTaggingConfus()
+    else:
+        processor = DataProcessorForTagging()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     n_gpu = torch.cuda.device_count()
@@ -466,7 +645,7 @@ def main():
         all_input_ids = torch.LongTensor([f.src_ids for f in train_features])
         all_input_mask = torch.LongTensor([f.attention_mask for f in train_features])
         all_label_ids = torch.LongTensor([f.trg_ids for f in train_features])
-        if relm:
+        if relm or craspell:
             all_ref_ids = torch.LongTensor([f.trg_ref_ids for f in train_features])
             train_data = TensorDataset(all_input_ids, all_input_mask, all_label_ids, all_ref_ids)
         else:
@@ -482,9 +661,8 @@ def main():
             args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
         model = AutoCSC[args.model_type].from_pretrained(args.load_model_path,
-                                                         cache_dir=cache_dir)
-        if args.load_state_dict:
-            model.load_state_dict(torch.load(args.load_state_dict))
+                                                         cache_dir=cache_dir,
+                                                         state_dict=torch.load(args.load_state_dict) if args.load_state_dict else None)
 
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
@@ -499,8 +677,12 @@ def main():
         ]
 
         optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
+        scheduler = get_scheduler(name=args.lr_scheduler_type,
+                                  optimizer=optimizer,
+                                  num_warmup_steps=args.max_train_steps * args.warmup_proportion,
+                                  num_training_steps=args.max_train_steps)
 
-        model, optimizer = accelerator.prepare(model, optimizer)
+        model, optimizer, scheduler = accelerator.prepare(model, optimizer, scheduler)
         
         if args.do_eval:
             eval_examples = processor.get_dev_examples(args.data_dir, args.eval_on)
@@ -509,7 +691,7 @@ def main():
             all_input_ids = torch.LongTensor([f.src_ids for f in eval_features])
             all_input_mask = torch.LongTensor([f.attention_mask for f in eval_features])
             all_label_ids = torch.LongTensor([f.trg_ids for f in eval_features])
-            if relm:
+            if relm or craspell:
                 all_ref_ids = torch.LongTensor([f.trg_ref_ids for f in eval_features])
                 eval_data = TensorDataset(all_input_ids, all_input_mask, all_label_ids, all_ref_ids)
             else:
@@ -520,6 +702,7 @@ def main():
 
     if args.do_train:
         logger.info("***** Running training *****")
+        logger.info("  Num examples = %d", len(train_features))
         logger.info("  Batch size = %d", args.train_batch_size * accelerator.num_processes)
         logger.info("  Num steps = %d", args.max_train_steps)
 
@@ -531,22 +714,32 @@ def main():
             if wrap: break
             train_loss = 0
             num_train_examples = 0
+            train_steps = 0
 
             for step, batch in enumerate(train_dataloader):
                 model.train()
                 batch = tuple(t.to(device) for t in batch)
                 if relm:
                     src_ids, attention_mask, trg_ids, trg_ref_ids = batch
+                    src_ids = mask_tokens_only_neg(src_ids, trg_ref_ids, tokenizer, args.noise_probability)
+                elif craspell:
+                    src_ids, attention_mask, trg_ids, noisy_src_ids = batch
                     if args.mft:
-                        src_ids = mask_tokens_only_neg(src_ids, trg_ref_ids, tokenizer, args.noise_probability)
+                        src_ids, noisy_src_ids = mask_tokens_only_neg_2(src_ids, noisy_src_ids, trg_ids, tokenizer, args.noise_probability)
                 else:
                     src_ids, attention_mask, trg_ids = batch
                     if args.mft:
                         src_ids = mask_tokens_only_neg(src_ids, trg_ids, tokenizer, args.noise_probability)
 
-                outputs = model(src_ids=src_ids,
-                                attention_mask=attention_mask,
-                                trg_ids=trg_ids)
+                if not craspell:
+                    outputs = model(src_ids=src_ids,
+                                    attention_mask=attention_mask,
+                                    trg_ids=trg_ids)
+                else:
+                    outputs = model(src_ids=src_ids,
+                                    attention_mask=attention_mask,
+                                    trg_ids=trg_ids,
+                                    noisy_src_ids=noisy_src_ids)
                 loss = outputs["loss"]
 
                 if n_gpu > 1:
@@ -557,15 +750,17 @@ def main():
 
                 train_loss += loss.item()
                 num_train_examples += src_ids.size(0)
+                train_steps += 1
                 if (step + 1) % args.gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
                     optimizer.step()
                     optimizer.zero_grad()
+                    scheduler.step()
                     global_step += 1
                     progress_bar.update(1)
 
                 if args.do_eval and global_step % args.save_steps == 0:
                     logger.info("***** Running evaluation *****")
-                    logger.info("  Num examples = %d", len(eval_examples))
+                    logger.info("  Num examples = %d", len(eval_features))
                     logger.info("  Batch size = %d", args.eval_batch_size * accelerator.num_processes)
 
                     def decode(input_ids):
@@ -597,7 +792,7 @@ def main():
                                 all_labels += [decode(t)]
                                 all_predictions += [decode(p)]
 
-                    loss = train_loss / global_step
+                    loss = train_loss / train_steps
                     p, r, f1, fpr, tp, fp, fn = Metrics.compute(all_inputs, all_labels, all_predictions)
     
                     output_tp_file = os.path.join(args.output_dir, "sents.tp")
@@ -648,6 +843,102 @@ def main():
                 if global_step >= args.max_train_steps:
                     wrap = True
                     break
+
+    if args.do_eval and not args.do_train and not args.test_on_lemon:
+        accelerator = Accelerator(cpu=args.no_cuda, mixed_precision="fp16" if args.fp16 else "no")
+        device = accelerator.device
+
+        model = AutoCSC[args.model_type].from_pretrained(args.load_model_path,
+                                                         state_dict=torch.load(args.load_state_dict),
+                                                         cache_dir=cache_dir)
+        model = accelerator.prepare(model)
+
+        eval_examples = processor.get_test_examples(args.data_dir, args.eval_on)
+        logger.info("test on: {}".format(args.eval_on))
+        eval_features = processor.convert_examples_to_features(eval_examples, args.max_seq_length, tokenizer, False)
+
+        all_input_ids = torch.tensor([f.src_ids for f in eval_features], dtype=torch.long)
+        all_input_mask = torch.tensor([f.attention_mask for f in eval_features], dtype=torch.long)
+        all_label_ids = torch.tensor([f.trg_ids for f in eval_features], dtype=torch.long)
+        if relm:
+            all_ref_ids = torch.LongTensor([f.trg_ref_ids for f in eval_features])
+            eval_data = TensorDataset(all_input_ids, all_input_mask, all_label_ids, all_ref_ids)
+        else:
+            eval_data = TensorDataset(all_input_ids, all_input_mask, all_label_ids)
+
+        eval_dataloader = DataLoader(eval_data, shuffle=False, batch_size=args.eval_batch_size)
+        eval_dataloader = accelerator.prepare(eval_dataloader)
+
+        def decode(input_ids):
+            return tokenizer.convert_ids_to_tokens(input_ids, skip_special_tokens=True)
+
+        model.eval()
+        all_inputs, all_labels, all_predictions = [], [], []
+        for batch in tqdm(eval_dataloader, leave=False):
+            batch = tuple(t.to(device) for t in batch)
+            src_ids, attention_mask, trg_ids = batch[:3]
+            with torch.no_grad():
+                outputs = model(src_ids=src_ids,
+                                attention_mask=attention_mask,
+                                trg_ids=trg_ids)
+                prd_ids = outputs["predict_ids"]
+
+            src_ids, trg_ids, prd_ids = accelerator.gather_for_metrics((src_ids, trg_ids, prd_ids))
+            for s, t, p in zip(src_ids.tolist(), trg_ids.tolist(), prd_ids.tolist()):
+                if relm:
+                    _t = [tt for tt, st in zip(t, s) if st == tokenizer.mask_token_id]
+                    _p = [pt for pt, st in zip(p, s) if st == tokenizer.mask_token_id]
+
+                    all_inputs += [decode(s)]
+                    all_labels += [decode(_t)]
+                    all_predictions += [decode(_p)]
+
+                else:
+                    all_inputs += [decode(s)]
+                    all_labels += [decode(t)]
+                    all_predictions += [decode(p)]
+
+        if args.eval_mode == "evaluate":
+
+            if args.detect:
+                p, r, f1, fpr = Metrics.compute_detect(all_inputs, all_labels, all_predictions)
+                logger.info("detect: p = %.2f, r = %.2f, f1 = %.2f, fpr = %.2f \n", p * 100, r * 100, f1 * 100, fpr * 100)
+
+            p, r, f1, fpr, tp, fp, fn = Metrics.compute(all_inputs, all_labels, all_predictions)
+
+            if args.response_file:
+                output_file = os.path.join(args.output_dir, args.response_file)
+                with open(output_file, "w") as writer:
+                    for input, label, prediction in zip(all_inputs, all_labels, all_predictions):
+                        writer.write("input: " + " ".join(input) + "\t")
+                        writer.write("label: " + " ".join(label) + "\t")
+                        writer.write("prediction: " + " ".join(prediction) + "\t")
+                        if prediction==label:
+                            writer.write("correct\n")
+                        else:
+                            writer.write("wrong\n")
+
+            result = {
+                "eval_p": p * 100,
+                "eval_r": r * 100,
+                "eval_f1": f1 * 100,
+                "eval_fpr": fpr * 100,
+            }
+            output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
+            with open(output_eval_file, "a") as writer:
+                logger.info("***** Eval results *****")
+                writer.write("eval {} on {}. \n".format(args.model_type, args.eval_on))
+                writer.write("use checkpoint: {}\n".format(args.load_state_dict))
+                for key in sorted(result.keys()):
+                    writer.write("%s = %s\n" % (key, str(result[key])))
+                    logger.info("Global step: %s,  %s = %s", str(-1), key, str(result[key]))
+        else:
+            assert args.eval_mode == "predict"
+            output_file = os.path.join(args.output_dir, "predict_results_{}.jsonl".format(args.model_type))
+            with jsonlines.open(output_file, "w") as writer:
+                for input, prediction in zip(all_inputs, all_predictions):
+                    writer.write({"input": input, "prediction": prediction, "type": "correct" if equals(input,prediction) else "wrong"})
+
 
     if args.test_on_lemon:
         accelerator = Accelerator(cpu=args.no_cuda, mixed_precision="fp16" if args.fp16 else "no")

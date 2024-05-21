@@ -21,7 +21,9 @@ Fine-tuning results on some of benchmarks:
 
 *ReLM* pre-trained model is released. It is a rephrasing language model trained based on bert-base-chinese and 34 million monolingual data.
 
-[relm-m0.2.bin](https://drive.google.com/file/d/1vjPhPO0fTYZS80dTE5ba4vhwDlSnSfA4/view?usp=share_link)
+The main idea is illustrated in the figure below. We concatenate the input and a sequence of mask tokens of the same length as the input, and train the model to rephrase the entire sentence by infilling additional slots, instead of character-to-character tagging. We also apply the masked-fine-tuning technique during training, which masks a proportion of characters in the source sentence. We will not mask source sentence in evaluation stage.
+
+![](figs/relm.png)
 
 [relm-m0.3.bin](https://drive.google.com/file/d/10vvkG_jzNK-CjIwlSvizhE1IOpnn9OqN/view?usp=share_link)
 
@@ -136,4 +138,3 @@ CUDA_VISIBLE_DEVICES=0 python run.py \
   --model_type relm \
   --load_state_dict relm-m0.3.bin
 ```
-

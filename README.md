@@ -108,6 +108,60 @@ loss = outputs["loss"]
 prd_ids = outputs["predict_ids"].tolist()
 ```
 
+
+
+Inference for ReLM
+
+```python
+from autocsc import AutoCSCReLM
+import torch
+from transformers import AutoTokenizer
+from run import *
+
+
+load_state_path = '../csc_model/lemon/ReLM/relm-m0.3.bin'
+
+tokenizer = AutoTokenizer.from_pretrained('bert-base-chinese',
+                                        use_fast=True,
+                                        add_prefix_space=True)
+
+model = AutoCSCReLM.from_pretrained('bert-base-chinese',
+                                    state_dict=torch.load(load_state_path),
+                                    cache_dir="../cache")
+max_seq_length = 256
+src = ['发动机故障切纪盲目拆检']
+tgt = ['发动机故障切忌盲目拆检']
+
+def decode(input_ids):
+    return tokenizer.convert_ids_to_tokens(input_ids, skip_special_tokens=True)
+
+processor = DataProcessorForRephrasing()
+lines = [(list(src[i]), list(tgt[i])) for i in range(len(src))]
+eval_examples = processor._create_examples(lines, 'test')
+eval_features = processor.convert_examples_to_features(eval_examples, max_seq_length, tokenizer, False)
+src_ids = torch.tensor([f.src_ids for f in eval_features], dtype=torch.long)
+attention_mask = torch.tensor([f.attention_mask for f in eval_features], dtype=torch.long)
+trg_ids = torch.tensor([f.trg_ids for f in eval_features], dtype=torch.long)
+
+all_inputs, all_labels, all_predictions = [], [], []
+with torch.no_grad():
+    outputs = model(src_ids=src_ids,
+                    attention_mask=attention_mask,
+                    trg_ids=trg_ids)
+    prd_ids = outputs["predict_ids"]
+for s, t, p in zip(src_ids.tolist(), trg_ids.tolist(), prd_ids.tolist()):
+    _t = [tt for tt, st in zip(t, s) if st == tokenizer.mask_token_id]
+    _p = [pt for pt, st in zip(p, s) if st == tokenizer.mask_token_id]
+
+    all_inputs += [decode(s)]
+    all_labels += [decode(_t)]
+    all_predictions += [decode(_p)]
+
+print(all_inputs)
+print(all_labels)
+print(all_predictions)
+```
+
 If you have new models or suggestions for promoting our implementations, feel free to email me.
 
 
